@@ -277,37 +277,4 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
     cout << "number of bounding-boxes in prev-frame: " << prevFrame.boundingBoxes.size() << " | in curr-frame: " << currFrame.boundingBoxes.size()
          << " | number of matched-bounding-boxes: " << bbBestMatches.size() << endl;
 
-        // int maxMatch = 0;
-        // pair<int, int> bestMatch;
-        // for (auto& prevBox : prevFrame.boundingBoxes)
-        // {
-        //     pair<int, int> pairKey = make_pair(prevBox.boxID, currBox.boxID);
-        //     if (countBoxMatches[pairKey] > maxMatch)
-        //     {
-        //         maxMatch = countBoxMatches[pairKey];
-        //         bestMatch = pairKey;
-        //     }    
-        // }
-
-        // // consider it a match when number of common keypoints are more than 50% of the total matched keypoints
-        // if (maxMatch > currBox.kptMatches.size() * 0.5)
-        // {
-        //     // first, check if bounding-box j (bestMatch.first) is already paired
-        //     // 'find' returns 'end()' when it does not find the value
-        //     if(prevFrameMatchedBB.find(bestMatch.first) == prevFrameMatchedBB.end())
-        //     {
-        //         bestBBMatches[bestMatch.first] = bestMatch.second;
-        //         prevFrameMatchedBB.insert(bestMatch.first);
-        //     }
-        //     else
-        //     {
-        //         cerr << "Warning: there are more than one bounding-box in the currFrame that can be matched with the same bounding-box\n"
-        //              << "in the prevFrame (with more than '50%' overlap) --> ignoring the new match / keeping the initial match" << endl;
-        //     }
-        // }
-        // else
-        // {
-        //     cerr << "Warning: bounding-box couldn't match; the ratio numCommonMatchKpts / totalMatchKpts = " 
-        //          << (float)maxMatch / (float)currFrame.boundingBoxes[i].kptMatches.size() << endl;
-        // }
 }
