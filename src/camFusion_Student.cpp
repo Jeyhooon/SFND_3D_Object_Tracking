@@ -1,4 +1,5 @@
 
+#include <unordered_set>
 #include <iostream>
 #include <algorithm>
 #include <numeric>
@@ -157,7 +158,156 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
 }
 
 
+void helperMatchCurrBox(BoundingBox& currBox, const DataFrame& prevFrame, map<pair<int, int>, int>& countPairs , map<int, int>& bestMatches, map<int, pair<int, float>>& alreadyMatchedBB, map<int, BoundingBox*>& boxMap)
+{
+    // criterion: confidence_ratio = num common matched kpts between bounding-boxes / the total matched kpts in the currBounding-Box.
+    float confidenceRatioThreshold = 0.5;
+    int currBoxID = currBox.boxID;
+    int totalCurrMatchKpts = currBox.kptMatches.size();
+    boxMap[currBoxID] = &currBox;
+
+    int maxMatches = 0;
+    pair<int, int> bestMatchPair;
+    for (auto& prevBox : prevFrame.boundingBoxes)
+    {
+        pair<int, int> pairKey = make_pair(prevBox.boxID, currBox.boxID);
+        int numMatchedKpts = countPairs[pairKey];
+    
+        if (alreadyMatchedBB.find(prevBox.boxID) != alreadyMatchedBB.end())
+        {
+            // if prevBox is already matched; check the confidence ratios
+            float confidenceRatio = (float)numMatchedKpts / (float)totalCurrMatchKpts;
+            if (confidenceRatio > alreadyMatchedBB[prevBox.boxID].second)
+            {
+                // if it's larger then consider updating the maxMatches and bestMatchPair variables
+                // but don't update the alreadyMatchedBB (it will be updated later); because maxMatches and bestMatchPair still not finalized
+                if (numMatchedKpts > maxMatches)
+                {
+                    maxMatches = numMatchedKpts;
+                    bestMatchPair = pairKey;
+                }
+            }
+        }
+        else
+        {
+            if (numMatchedKpts > maxMatches)
+            {
+                maxMatches = numMatchedKpts;
+                bestMatchPair = pairKey;
+            }
+        }
+    }
+
+    float bestConfidenceRatio = (float)maxMatches / (float)totalCurrMatchKpts;
+    if (bestConfidenceRatio > confidenceRatioThreshold)
+    {
+        if (alreadyMatchedBB.find(bestMatchPair.first) != alreadyMatchedBB.end())
+        {
+            // means if key (i.e. prevBoxID) exists --> is already used to matched BB
+            // so it must have larger confidence ratio; otherwise, it wouldn't get added in the first place
+            assert (bestConfidenceRatio > alreadyMatchedBB[bestMatchPair.first].second);
+
+            // need to find new pair for this boxID from current frame 
+            // (because it will get replaced by the new pair)
+            int replacedCurrBoxID = bestMatches[bestMatchPair.first]; 
+
+            // now replace the new pair (i.e.: the better/more-confident pair)
+            alreadyMatchedBB[bestMatchPair.first] = make_pair(bestMatchPair.second, bestConfidenceRatio);
+            bestMatches[bestMatchPair.first] = bestMatchPair.second;
+
+            // and find the new match for the one that is being replaced
+            helperMatchCurrBox(*boxMap[replacedCurrBoxID], prevFrame, countPairs , bestMatches, alreadyMatchedBB, boxMap);
+
+        }
+        else
+        {
+            bestMatches[bestMatchPair.first] = bestMatchPair.second;
+            alreadyMatchedBB[bestMatchPair.first] = make_pair(bestMatchPair.second, bestConfidenceRatio);
+        }
+    }
+    else
+    {
+        cerr << "Warning: bounding-box couldn't match; the confidence-ratio = " << bestConfidenceRatio
+             << " which is below the threshold= " << confidenceRatioThreshold << endl;
+    }
+
+}
+
 void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
 {
-    // ...
+    // this is to populate the DataFrame which tracks all matched keypoints between prevFrame and currFrame
+    currFrame.kptMatches = matches;     
+
+    // Note: matched kpt could be at the intersection of multiple bounding-boxes and we add this point to all of them 
+    // (don't ignore them, since number of matched keypoints might not be large and we can still match the bounding-boxes based on the highest number of matched keypoints). 
+
+    map<pair<int, int>, int> countBoxMatches;
+    for (const auto& matchKpt: matches)
+    {
+        for (auto& currBox : currFrame.boundingBoxes)
+        {
+            // in the matchKpt, trainIdx is the index in the currFrame
+            if (currBox.roi.contains(currFrame.keypoints[matchKpt.trainIdx].pt))
+            {
+                currBox.kptMatches.push_back(matchKpt);
+
+                // Now, loop over the Bounding-Boxes from the prevFrame to find the match
+                for (auto& prevBox: prevFrame.boundingBoxes)
+                {
+                    // in the matchKpt, queryIdx is the index in the prevFrame
+                    if (prevBox.roi.contains(prevFrame.keypoints[matchKpt.queryIdx].pt))
+                    {
+                        countBoxMatches[make_pair(prevBox.boxID, currBox.boxID)]++;
+                    }
+                }
+            }
+        }
+    }
+
+    // We have stored the num kpt matches between all pairs of bounding-boxes; now we can find the ones that best match each other    
+    // set of bounding-boxes from prevFrame that are already matched with one of currFrame bounding-boxes   
+    map<int, pair<int, float>> alreadyMatchedBB;    // key: prevBoxID, pair: <currBoxID, confidenceRatio>
+    map<int, BoundingBox*> currProcessedBoxMap;
+
+    for (auto& currBox : currFrame.boundingBoxes)
+    {
+        helperMatchCurrBox(currBox, prevFrame, countBoxMatches, bbBestMatches, alreadyMatchedBB, currProcessedBoxMap);
+    }
+
+    cout << "number of bounding-boxes in prev-frame: " << prevFrame.boundingBoxes.size() << " | in curr-frame: " << currFrame.boundingBoxes.size()
+         << " | number of matched-bounding-boxes: " << bbBestMatches.size() << endl;
+
+        // int maxMatch = 0;
+        // pair<int, int> bestMatch;
+        // for (auto& prevBox : prevFrame.boundingBoxes)
+        // {
+        //     pair<int, int> pairKey = make_pair(prevBox.boxID, currBox.boxID);
+        //     if (countBoxMatches[pairKey] > maxMatch)
+        //     {
+        //         maxMatch = countBoxMatches[pairKey];
+        //         bestMatch = pairKey;
+        //     }    
+        // }
+
+        // // consider it a match when number of common keypoints are more than 50% of the total matched keypoints
+        // if (maxMatch > currBox.kptMatches.size() * 0.5)
+        // {
+        //     // first, check if bounding-box j (bestMatch.first) is already paired
+        //     // 'find' returns 'end()' when it does not find the value
+        //     if(prevFrameMatchedBB.find(bestMatch.first) == prevFrameMatchedBB.end())
+        //     {
+        //         bestBBMatches[bestMatch.first] = bestMatch.second;
+        //         prevFrameMatchedBB.insert(bestMatch.first);
+        //     }
+        //     else
+        //     {
+        //         cerr << "Warning: there are more than one bounding-box in the currFrame that can be matched with the same bounding-box\n"
+        //              << "in the prevFrame (with more than '50%' overlap) --> ignoring the new match / keeping the initial match" << endl;
+        //     }
+        // }
+        // else
+        // {
+        //     cerr << "Warning: bounding-box couldn't match; the ratio numCommonMatchKpts / totalMatchKpts = " 
+        //          << (float)maxMatch / (float)currFrame.boundingBoxes[i].kptMatches.size() << endl;
+        // }
 }
