@@ -183,7 +183,74 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
 void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, 
                       std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC, cv::Mat *visImg)
 {
-    // ...
+    // Calculate Distance change between kpts in two subsequent frames
+    double minDist = 100.0; // min. required distance (to not choose points very close to each other)
+    vector<double> distChangeVec;
+    vector<double> distanceCurrVec;
+    vector<double> distancePrevVec;
+    for (auto it1 = kptMatches.begin(); it1 != std::prev(kptMatches.end()); ++it1)
+    {
+        cv::KeyPoint* prevPt1 = &kptsPrev.at(it1->queryIdx);
+        cv::KeyPoint* currPt1 = &kptsCurr.at(it1->trainIdx);
+        // start from the one element ahead of outer iterator to prevent repeated distance calculation
+        for (auto it2 = std::next(it1); it2 != kptMatches.end(); ++it2)
+        {
+            cv::KeyPoint* prevPt2 = &kptsPrev.at(it2->queryIdx);
+            cv::KeyPoint* currPt2 = &kptsCurr.at(it2->trainIdx);
+            double distPrev = sqrt((prevPt2->pt.x - prevPt1->pt.x)*(prevPt2->pt.x - prevPt1->pt.x) + (prevPt2->pt.y - prevPt1->pt.y)*(prevPt2->pt.y - prevPt1->pt.y));
+            double distCurr = sqrt((currPt2->pt.x - currPt1->pt.x)*(currPt2->pt.x - currPt1->pt.x) + (currPt2->pt.y - currPt1->pt.y)*(currPt2->pt.y - currPt1->pt.y));
+            if(distPrev > numeric_limits<double>::epsilon() && distCurr >= minDist)
+            {
+                distChangeVec.push_back(distCurr - distPrev);
+                distanceCurrVec.push_back(distCurr);
+                distancePrevVec.push_back(distPrev);
+            }
+        }
+    }
+
+    double meanDistChange = accumulate(distChangeVec.begin(), distChangeVec.end(), 0.0) / distChangeVec.size();
+    double variance = 0.0;
+    for (double val : distChangeVec)
+    {
+        variance += (val - meanDistChange)*(val - meanDistChange); 
+    }
+    variance /= (distChangeVec.size() - 1);       // sample variance
+    double stddevDistChange = sqrt(variance);
+
+    vector<double> distRatioVec;
+    for (int i = 0; i < distChangeVec.size(); ++i)
+    {
+        if (abs(distChangeVec[i] - meanDistChange) < 2.0*stddevDistChange)
+        {
+            distRatioVec.push_back(distanceCurrVec[i] / distancePrevVec[i]);
+        }
+    }
+
+    // only continue if list of distance ratios is not empty
+    if (distRatioVec.size() == 0)
+    {
+        TTC = NAN;
+        return;
+    }
+
+    // compute camera-based TTC from the median of distance ratios
+    sort(distRatioVec.begin(), distRatioVec.end());
+    int vecSize = distRatioVec.size();
+    double medianDistRatio;
+    if (vecSize % 2 == 0)
+    {
+        // even number of points; need to calculate the mean of two elements in the middle of the sorted array
+        medianDistRatio = (distRatioVec[vecSize/2 - 1] + distRatioVec[vecSize/2]) / 2;
+    }
+    else
+    {
+        // odd number of points; just take the middle element of the sorted array
+        medianDistRatio = distRatioVec[vecSize/2];
+    }
+
+    double dt = 1.0 / (frameRate + 1e-8);
+    TTC = -dt / (1 - medianDistRatio);
+    return;
 }
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr convertToPointCloud(const std::vector<LidarPoint>& lidarPoints)
@@ -240,7 +307,7 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
     {
         // This means we have insufficient data to correctly calculate the TTC
         // returning large positive number
-        TTC = numeric_limits<double>::infinity();
+        TTC = NAN;
         cerr << "Warning: Insufficient Data to Calculate TTC from LIDAR Points" << endl;
         return;
     }
@@ -316,7 +383,7 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
     double relVelX = (minDistanceXCurr - minDistanceXPrev) / (dt + 1e-8);    
     if (abs(relVelX) < 0.0001)
     {
-        TTC = -1.0;
+        TTC = NAN;
         cerr << "Warning: Calculated Relative-Velocity is close to zero: " << relVelX << endl;
     }
     else
