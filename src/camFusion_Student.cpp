@@ -213,9 +213,12 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
 
     // Find the point with minimum distance (iterating over clusters found) for both current and previous frame
     double minDistanceXCurr = numeric_limits<double>::max();
+    int numPointsClusteredCurr = 0;
     for (size_t i = 0; i < clusterIndicesCurr.size(); ++i)
     {
         int N = clusterIndicesCurr[i].indices.size(); // number of points in cluster
+        numPointsClusteredCurr += N;
+
         int P;
         if (N >= 100) {
             P = N/100; // 1st percentile
@@ -238,12 +241,16 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
             minDistanceXCurr = xValues[P];
         }
     }
+    cout << "Number of Discarded-Points in the Current-Frame: " << lidarPointsCurr.size() - numPointsClusteredCurr << endl;
     cout << "minDistanceXCurr: " << minDistanceXCurr << endl;
 
     double minDistanceXPrev = numeric_limits<double>::max();
+    int numPointsClusteredPrev = 0;
     for (size_t i = 0; i < clusterIndicesPrev.size(); ++i)
     {
         int N = clusterIndicesPrev[i].indices.size(); // number of points in cluster
+        numPointsClusteredPrev += N;
+
         int P;
         if (N >= 100) {
             P = N/100; // 1st percentile
@@ -266,6 +273,7 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
             minDistanceXPrev = xValues[P];
         }
     }
+    cout << "Number of Discarded-Points in the Previous-Frame: " << lidarPointsPrev.size() - numPointsClusteredPrev << endl;
     cout << "minDistanceXPrev: " << minDistanceXPrev << endl;
 
     // Computing Time-To-Collision using Constant Velocity Model (CVM) both for x (forward driving direction) 
