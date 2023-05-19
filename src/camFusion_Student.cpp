@@ -141,7 +141,41 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
 // associate a given bounding box with the keypoints it contains
 void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, std::vector<cv::DMatch> &kptMatches)
 {
-    // ...
+    vector<cv::DMatch> matchesInROI;
+    vector<double> distanceVec;
+    for (const auto& match : kptMatches)
+    {
+        cv::KeyPoint* prevPt = &kptsPrev[match.queryIdx]; 
+        cv::KeyPoint* currPt = &kptsCurr[match.trainIdx];
+        if (boundingBox.roi.contains(prevPt->pt) && boundingBox.roi.contains(prevPt->pt))
+        {
+            // if the matches are correct; then the points should be in similar positions in the two subsequent frames
+            // hence, points from prev frame that is matched should also be inside the current bounding-box (this could itself filter some outliers)
+            distanceVec.push_back(sqrt((prevPt->pt.x - currPt->pt.x)*(prevPt->pt.x - currPt->pt.x) + (prevPt->pt.y - currPt->pt.y)*(prevPt->pt.y - currPt->pt.y)));
+            matchesInROI.push_back(match);
+        }
+    }
+
+    double meanDistance = accumulate(distanceVec.begin(), distanceVec.end(), 0.0) / distanceVec.size();
+    double variance = 0.0;
+    for (double val : distanceVec)
+    {
+        variance += (val - meanDistance)*(val - meanDistance); 
+    }
+    variance /= (distanceVec.size() - 1);       // sample variance
+    double stddevDistance = sqrt(variance);
+
+    // key matched points that are within 2*stddev distance from the mean
+    for (const auto& match : matchesInROI)
+    {
+        cv::KeyPoint* prevPt = &kptsPrev[match.queryIdx]; 
+        cv::KeyPoint* currPt = &kptsCurr[match.trainIdx];
+        double distance = sqrt((prevPt->pt.x - currPt->pt.x)*(prevPt->pt.x - currPt->pt.x) + (prevPt->pt.y - currPt->pt.y)*(prevPt->pt.y - currPt->pt.y));
+        if (abs(distance - meanDistance) < 2.0*stddevDistance)
+        {
+            boundingBox.kptMatches.push_back(match);
+        }
+    }
 }
 
 
