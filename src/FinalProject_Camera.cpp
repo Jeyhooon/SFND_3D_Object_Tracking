@@ -242,9 +242,6 @@ int main(int argc, const char *argv[])
 
             cout << "#8 : TRACK 3D OBJECT BOUNDING BOXES done" << endl;
 
-            // REMOVE THIS LINE BEFORE PROCEEDING WITH THE FINAL PROJECT
-            continue; // skips directly to the next image without processing what comes beneath
-
             /* COMPUTE TTC ON OBJECT IN FRONT */
 
             // loop over all BB match pairs
@@ -271,6 +268,8 @@ int main(int argc, const char *argv[])
                 // compute TTC for current match
                 if( currBB->lidarPoints.size()>0 && prevBB->lidarPoints.size()>0 ) // only compute TTC if we have Lidar points
                 {
+                    cout << "for Bounding-Box: " << it1->second << endl;
+
                     //// STUDENT ASSIGNMENT
                     //// TASK FP.2 -> compute time-to-collision based on Lidar data (implement -> computeTTCLidar)
                     double ttcLidar; 

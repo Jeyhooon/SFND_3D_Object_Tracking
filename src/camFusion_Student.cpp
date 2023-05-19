@@ -5,6 +5,8 @@
 #include <numeric>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <pcl/point_types.h>
+#include <pcl/segmentation/extract_clusters.h>
 
 #include "camFusion.hpp"
 #include "dataStructures.h"
@@ -150,11 +152,141 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
     // ...
 }
 
+pcl::PointCloud<pcl::PointXYZ>::Ptr convertToPointCloud(const std::vector<LidarPoint>& lidarPoints)
+{
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    
+    // reserve memory the cloud to match the number of lidar points
+    cloud->points.reserve(lidarPoints.size());
+
+    for (const auto& point : lidarPoints)
+    {
+        // Add each LidarPoint as a pcl::PointXYZ
+        cloud->points.push_back(pcl::PointXYZ(point.x, point.y, point.z));
+    }
+
+    // Set the size of the cloud
+    cloud->width = cloud->points.size();
+    cloud->height = 1; // 1 for unorganized point cloud (i.e.: list of points)
+
+    return cloud;
+}
 
 void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
                      std::vector<LidarPoint> &lidarPointsCurr, double frameRate, double &TTC)
 {
-    // ...
+    // To be statistically robust we need to cluster the lidar points 
+    // and then find the min distance accross points in all clusters.
+    cout << "Number of Lidar Points in Current Frame: " << lidarPointsCurr.size() << " | in Previous Frame: " << lidarPointsPrev.size() << endl;
+    // First, convert LidarPoint into PCL PointCloud
+    pcl::PointCloud<pcl::PointXYZ>::Ptr prevCloud = convertToPointCloud(lidarPointsPrev);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr currCloud = convertToPointCloud(lidarPointsCurr);
+
+    // Create a KD-Tree
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+
+    // Create the clustering object (similar to DBSCAN algorithm)
+    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+    ec.setClusterTolerance(0.15); // 20cm
+    ec.setMinClusterSize(50);
+    ec.setMaxClusterSize(2000);
+    ec.setSearchMethod(tree);
+
+    // Run clustering on the current frame
+    std::vector<pcl::PointIndices> clusterIndicesCurr;
+    ec.setInputCloud(currCloud->makeShared());
+    ec.extract(clusterIndicesCurr);
+
+    // Run clustering on the previous frame
+    std::vector<pcl::PointIndices> clusterIndicesPrev;
+    ec.setInputCloud(prevCloud->makeShared());
+    ec.extract(clusterIndicesPrev);
+
+    if (clusterIndicesCurr.empty() || clusterIndicesPrev.empty())
+    {
+        // This means we have insufficient data to correctly calculate the TTC
+        // returning large positive number
+        TTC = numeric_limits<double>::infinity();
+        cerr << "Warning: Insufficient Data to Calculate TTC from LIDAR Points" << endl;
+        return;
+    }
+
+    // Find the point with minimum distance (iterating over clusters found) for both current and previous frame
+    double minDistanceXCurr = numeric_limits<double>::max();
+    for (size_t i = 0; i < clusterIndicesCurr.size(); ++i)
+    {
+        int N = clusterIndicesCurr[i].indices.size(); // number of points in cluster
+        int P;
+        if (N >= 100) {
+            P = N/100; // 1st percentile
+        } else if (N >= 10) {
+            P = N/10; // 10th percentile
+        } else {
+            P = N/2; // median
+        }
+
+        vector<double> xValues(N);
+        for (int j = 0; j < N; ++j)
+        {
+            xValues[j] = (*currCloud)[clusterIndicesCurr[i].indices[j]].x;
+        }
+
+        sort(xValues.begin(), xValues.end());
+        if (xValues[P] < minDistanceXCurr)
+        {
+            // calculating minimum X distance based on percentiles in each cluster (for robustness).
+            minDistanceXCurr = xValues[P];
+        }
+    }
+    cout << "minDistanceXCurr: " << minDistanceXCurr << endl;
+
+    double minDistanceXPrev = numeric_limits<double>::max();
+    for (size_t i = 0; i < clusterIndicesPrev.size(); ++i)
+    {
+        int N = clusterIndicesPrev[i].indices.size(); // number of points in cluster
+        int P;
+        if (N >= 100) {
+            P = N/100; // 1st percentile
+        } else if (N >= 10) {
+            P = N/10; // 10th percentile
+        } else {
+            P = N/2; // median
+        }
+
+        vector<double> xValues(N);
+        for (int j = 0; j < N; ++j)
+        {
+            xValues[j] = (*prevCloud)[clusterIndicesPrev[i].indices[j]].x;
+        }
+
+        sort(xValues.begin(), xValues.end());
+        if (xValues[P] < minDistanceXPrev)
+        {
+            // calculating minimum X distance based on percentiles in each cluster (for robustness).
+            minDistanceXPrev = xValues[P];
+        }
+    }
+    cout << "minDistanceXPrev: " << minDistanceXPrev << endl;
+
+    // Computing Time-To-Collision using Constant Velocity Model (CVM) both for x (forward driving direction) 
+    // added small value to avoid division by zero
+    double dt = 1.0 / (frameRate + 1e-8);
+    double relVelX = (minDistanceXCurr - minDistanceXPrev) / (dt + 1e-8);    
+    if (abs(relVelX) < 0.0001)
+    {
+        TTC = -1.0;
+        cerr << "Warning: Calculated Relative-Velocity is close to zero: " << relVelX << endl;
+    }
+    else
+    {
+        TTC = -minDistanceXCurr / relVelX;
+    }
+    
+
+    cout << "Found " << clusterIndicesCurr.size() << " clusters in current frame | Found " 
+         << clusterIndicesPrev.size() << " cluster in previous frame | TTC= " << TTC << " seconds" << endl;
+
+    return;
 }
 
 
