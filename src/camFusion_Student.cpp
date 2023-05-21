@@ -113,7 +113,7 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
         char str1[200], str2[200];
         sprintf(str1, "id=%d, #pts=%d", it1->boxID, (int)it1->lidarPoints.size());
         putText(topviewImg, str1, cv::Point2f(left-250, bottom+50), cv::FONT_ITALIC, 2, currColor);
-        sprintf(str2, "xmin=%2.2f m, yw=%2.2f m", xwmin, ywmax-ywmin);
+        sprintf(str2, "xmin=%2.3f m, yw=%2.2f m", xwmin, ywmax-ywmin);
         putText(topviewImg, str2, cv::Point2f(left-250, bottom+125), cv::FONT_ITALIC, 2, currColor);  
     }
 
@@ -128,7 +128,7 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
 
     // display image
     string windowName = "3D Objects";
-    cv::namedWindow(windowName, 1);
+    cv::namedWindow(windowName, 6);
     cv::imshow(windowName, topviewImg);
 
     if(bWait)
@@ -250,6 +250,7 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
 
     double dt = 1.0 / (frameRate + 1e-8);
     TTC = -dt / (1 - medianDistRatio);
+    cout << "Camera-TTC= " << TTC << endl;
     return;
 }
 
@@ -392,8 +393,8 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
     }
     
 
-    cout << "Found " << clusterIndicesCurr.size() << " clusters in current frame | Found " 
-         << clusterIndicesPrev.size() << " cluster in previous frame | TTC= " << TTC << " seconds" << endl;
+    cout << "Found " << clusterIndicesCurr.size() << " lidar-cluster(s) in current frame | Found " 
+         << clusterIndicesPrev.size() << " lidar-cluster(s) in previous frame\n" << "Lidar-TTC= " << TTC << " seconds" << endl;
 
     return;
 }
