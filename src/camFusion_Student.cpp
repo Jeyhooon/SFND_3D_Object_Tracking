@@ -141,13 +141,14 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
 // associate a given bounding box with the keypoints it contains
 void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, std::vector<cv::DMatch> &kptMatches)
 {
+    boundingBox.kptMatches.clear();
     vector<cv::DMatch> matchesInROI;
     vector<double> distanceVec;
     for (const auto& match : kptMatches)
     {
         cv::KeyPoint* prevPt = &kptsPrev[match.queryIdx]; 
         cv::KeyPoint* currPt = &kptsCurr[match.trainIdx];
-        if (boundingBox.roi.contains(prevPt->pt) && boundingBox.roi.contains(prevPt->pt))
+        if (boundingBox.roi.contains(prevPt->pt) && boundingBox.roi.contains(currPt->pt))
         {
             // if the matches are correct; then the points should be in similar positions in the two subsequent frames
             // hence, points from prev frame that is matched should also be inside the current bounding-box (this could itself filter some outliers)
@@ -176,6 +177,9 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
             boundingBox.kptMatches.push_back(match);
         }
     }
+
+    cout << "Removed " << int(matchesInROI.size()) - int(boundingBox.kptMatches.size()) << " kpt outliers from bounding-box " 
+         << boundingBox.boxID << endl;
 }
 
 
@@ -408,39 +412,39 @@ void helperMatchCurrBox(BoundingBox& currBox, const DataFrame& prevFrame, map<pa
     int totalCurrMatchKpts = currBox.kptMatches.size();
     boxMap[currBoxID] = &currBox;
 
-    int maxMatches = 0;
+    int maxOverlapMatches = 0;
     pair<int, int> bestMatchPair;
     for (auto& prevBox : prevFrame.boundingBoxes)
     {
         pair<int, int> pairKey = make_pair(prevBox.boxID, currBox.boxID);
-        int numMatchedKpts = countPairs[pairKey];
+        int numOverlapKpts = countPairs[pairKey];
     
         if (alreadyMatchedBB.find(prevBox.boxID) != alreadyMatchedBB.end())
         {
             // if prevBox is already matched; check the confidence ratios
-            float confidenceRatio = (float)numMatchedKpts / (float)totalCurrMatchKpts;
+            float confidenceRatio = (float)numOverlapKpts / (float)totalCurrMatchKpts;
             if (confidenceRatio > alreadyMatchedBB[prevBox.boxID].second)
             {
-                // if it's larger then consider updating the maxMatches and bestMatchPair variables
-                // but don't update the alreadyMatchedBB (it will be updated later); because maxMatches and bestMatchPair still not finalized
-                if (numMatchedKpts > maxMatches)
+                // if it's larger then consider updating the maxOverlapMatches and bestMatchPair variables
+                // but don't update the alreadyMatchedBB (it will be updated later); because maxOverlapMatches and bestMatchPair still not finalized
+                if (numOverlapKpts > maxOverlapMatches)
                 {
-                    maxMatches = numMatchedKpts;
+                    maxOverlapMatches = numOverlapKpts;
                     bestMatchPair = pairKey;
                 }
             }
         }
         else
         {
-            if (numMatchedKpts > maxMatches)
+            if (numOverlapKpts > maxOverlapMatches)
             {
-                maxMatches = numMatchedKpts;
+                maxOverlapMatches = numOverlapKpts;
                 bestMatchPair = pairKey;
             }
         }
     }
 
-    float bestConfidenceRatio = (float)maxMatches / (float)totalCurrMatchKpts;
+    float bestConfidenceRatio = (float)maxOverlapMatches / (float)totalCurrMatchKpts;
     if (bestConfidenceRatio > confidenceRatioThreshold)
     {
         if (alreadyMatchedBB.find(bestMatchPair.first) != alreadyMatchedBB.end())
@@ -477,13 +481,10 @@ void helperMatchCurrBox(BoundingBox& currBox, const DataFrame& prevFrame, map<pa
 
 void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame, bool bVis)
 {
-    // this is to populate the DataFrame which tracks all matched keypoints between prevFrame and currFrame
-    currFrame.kptMatches = matches;     
-
     // Note: matched kpt could be at the intersection of multiple bounding-boxes and we add this point to all of them 
     // (don't ignore them, since number of matched keypoints might not be large and we can still match the bounding-boxes based on the highest number of matched keypoints). 
 
-    map<pair<int, int>, int> countBoxMatches;
+    map<pair<int, int>, int> countBoxOverlap;
     for (const auto& matchKpt: matches)
     {
         for (auto& currBox : currFrame.boundingBoxes)
@@ -499,7 +500,7 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
                     // in the matchKpt, queryIdx is the index in the prevFrame
                     if (prevBox.roi.contains(prevFrame.keypoints[matchKpt.queryIdx].pt))
                     {
-                        countBoxMatches[make_pair(prevBox.boxID, currBox.boxID)]++;
+                        countBoxOverlap[make_pair(prevBox.boxID, currBox.boxID)]++;
                     }
                 }
             }
@@ -513,7 +514,7 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
 
     for (auto& currBox : currFrame.boundingBoxes)
     {
-        helperMatchCurrBox(currBox, prevFrame, countBoxMatches, bbBestMatches, alreadyMatchedBB, currProcessedBoxMap);
+        helperMatchCurrBox(currBox, prevFrame, countBoxOverlap, bbBestMatches, alreadyMatchedBB, currProcessedBoxMap);
     }
 
     cout << "number of bounding-boxes in prev-frame: " << prevFrame.boundingBoxes.size() << " | in curr-frame: " << currFrame.boundingBoxes.size()
