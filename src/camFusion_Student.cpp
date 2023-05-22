@@ -551,6 +551,10 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
 
             int icolor = (unsigned) rng;
             auto color = cv::Scalar(icolor&255, (icolor>>8)&255, (icolor>>16)&255);
+            // the operation icolor&255 effectively takes the last 8 bits of icolor (AND '&' is a bitwise operation)
+            // (the least significant 8 bits, or the rightmost 8 bits in binary representation), 
+            // discards the rest, and this is how we get the blue channel value for our color.
+            // icolor>>8: shifts the random number 8 bits to the right, effectively discarding the least significant 8 bits
 
             // Draw bounding box
             cv::rectangle(prevImg, prevBox, color, 2);
