@@ -108,6 +108,9 @@ int main(int argc, const char *argv[])
 
         for (const string descriptorType : descriptorList)
         {
+            // reset the buffer for new detector-descriptor combination
+            dataBuffer.clear();
+
             /* MAIN LOOP OVER ALL IMAGES */
             for (size_t imgIndex = 0; imgIndex <= imgEndIndex - imgStartIndex; imgIndex+=imgStepWidth)
             {
@@ -289,6 +292,7 @@ int main(int argc, const char *argv[])
                     /* COMPUTE TTC ON OBJECT IN FRONT */
 
                     // loop over all BB match pairs
+                    bool bFoundBBwithLidarPoints = false;
                     for (auto it1 = (dataBuffer.end() - 1)->bbMatches.begin(); it1 != (dataBuffer.end() - 1)->bbMatches.end(); ++it1)
                     {
                         // find bounding boxes associates with current match
@@ -329,9 +333,11 @@ int main(int argc, const char *argv[])
 
                             file << int(imgIndex) << "," << detectorType << "," << descriptorType << "," 
                                     << int(currBB->kptMatches.size()) << "," << ttcCamera << "\n";
+                            
+                            bFoundBBwithLidarPoints = true;
                             //// EOF STUDENT ASSIGNMENT
 
-                            bVis = true;
+                            bVis = false;
                             if (bVis)
                             {
                                 cv::Mat visImg = (dataBuffer.end() - 1)->cameraImg.clone();
@@ -353,6 +359,12 @@ int main(int argc, const char *argv[])
                         } // eof TTC computation
 
                     } // eof loop over all BB matches   
+                    if (bFoundBBwithLidarPoints == false)
+                    {
+                        // means object detection couldn't find a bounding box on the preceeding vehicle in one of the frames
+                        // hence, fill the file with empty results
+                        file << int(imgIndex) << "," << detectorType << "," << descriptorType << ",-,-\n";
+                    }
 
                 }
 
