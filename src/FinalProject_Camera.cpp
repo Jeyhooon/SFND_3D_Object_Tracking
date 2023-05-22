@@ -74,7 +74,7 @@ int main(int argc, const char *argv[])
     int dataBufferSize = 2;       // no. of images which are held in memory (ring buffer) at the same time
     vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
     bool bVis = false;            // visualize results
-    bool bBenchmark = true;      // Benchmarking mode --> loop over kpt detectory and descriptor types
+    bool bBenchmark = false;      // Benchmarking mode --> loop over kpt detectory and descriptor types
 
     // Open the CSV file (to store the results)
     std::ofstream file("../Camera-TTC-data.csv");
@@ -95,7 +95,7 @@ int main(int argc, const char *argv[])
     for (const string detectorType : detectorList)
     {
         /* EXTRACT KEYPOINT DESCRIPTORS */
-        string descriptorType = "BRISK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
+        string descriptorType = "FREAK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
         vector<string> descriptorList;
         if (bBenchmark)
         {
@@ -276,7 +276,9 @@ int main(int argc, const char *argv[])
                     //// STUDENT ASSIGNMENT
                     //// TASK FP.1 -> match list of 3D objects (vector<BoundingBox>) between current and previous frame (implement ->matchBoundingBoxes)
                     map<int, int> bbBestMatches;        // key-value pairs (similar to dictionary in python)
-                    matchBoundingBoxes(matches, bbBestMatches, *(dataBuffer.end()-2), *(dataBuffer.end()-1)); // associate bounding boxes between current and previous frame using keypoint matches
+                    bVis = false;   // to visualize matched bounding-boxes (for debugging)
+                    matchBoundingBoxes(matches, bbBestMatches, *(dataBuffer.end()-2), *(dataBuffer.end()-1), bVis); // associate bounding boxes between current and previous frame using keypoint matches
+                    bVis = false;
                     //// EOF STUDENT ASSIGNMENT
 
                     // store matches in current data frame
@@ -329,7 +331,7 @@ int main(int argc, const char *argv[])
                                     << int(currBB->kptMatches.size()) << "," << ttcCamera << "\n";
                             //// EOF STUDENT ASSIGNMENT
 
-                            bVis = false;
+                            bVis = true;
                             if (bVis)
                             {
                                 cv::Mat visImg = (dataBuffer.end() - 1)->cameraImg.clone();

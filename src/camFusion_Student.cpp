@@ -475,7 +475,7 @@ void helperMatchCurrBox(BoundingBox& currBox, const DataFrame& prevFrame, map<pa
 
 }
 
-void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
+void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame, bool bVis)
 {
     // this is to populate the DataFrame which tracks all matched keypoints between prevFrame and currFrame
     currFrame.kptMatches = matches;     
@@ -519,4 +519,51 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
     cout << "number of bounding-boxes in prev-frame: " << prevFrame.boundingBoxes.size() << " | in curr-frame: " << currFrame.boundingBoxes.size()
          << " | number of matched-bounding-boxes: " << bbBestMatches.size() << endl;
 
+    if (bVis)
+    {
+        cv::Mat currImg = (currFrame.cameraImg).clone();
+        cv::Mat prevImg = (prevFrame.cameraImg).clone();
+        cv::RNG rng(0xFFFFFFFF); // Seed for random number
+
+        for (auto& bbmatch : bbBestMatches)
+        {
+            int prevBoxId = bbmatch.first;
+            int currBoxId = bbmatch.second;
+            cv::Rect prevBox, currBox;
+            
+            for (auto& box : prevFrame.boundingBoxes)
+            {
+                if (box.boxID == prevBoxId)
+                {
+                    prevBox = box.roi;
+                    break;
+                }
+            }
+
+            for (auto& box : currFrame.boundingBoxes)
+            {
+                if (box.boxID == currBoxId)
+                {
+                    currBox = box.roi;
+                    break;
+                }
+            }
+
+            int icolor = (unsigned) rng;
+            auto color = cv::Scalar(icolor&255, (icolor>>8)&255, (icolor>>16)&255);
+
+            // Draw bounding box
+            cv::rectangle(prevImg, prevBox, color, 2);
+            cv::rectangle(currImg, currBox, color, 2);
+        }
+
+        // Concatenate images horizontally
+        cv::Mat imgConcat;
+        cv::hconcat(prevImg, currImg, imgConcat);
+
+        // Display the Image
+        cv::namedWindow("Matched Bounding Boxes", cv::WINDOW_NORMAL);
+        cv::imshow("Matched Bounding Boxes", imgConcat);
+        cv::waitKey(0); // Wait for a keystroke in the window
+    }
 }
