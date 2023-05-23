@@ -146,11 +146,19 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
     boundingBox.kptMatches.clear();     // was populated when matching bounding-boxes across two subsequent frames
     vector<cv::DMatch> matchesInROI;
     vector<double> distanceVec;
+
+    float shrinkFactor = 0.10;
+    cv::Rect smallerBox;
+    smallerBox.x = boundingBox.roi.x + shrinkFactor * boundingBox.roi.width / 2.0;
+    smallerBox.y = boundingBox.roi.y + shrinkFactor * boundingBox.roi.height / 2.0;
+    smallerBox.width = boundingBox.roi.width * (1 - shrinkFactor);
+    smallerBox.height = boundingBox.roi.height * (1 - shrinkFactor);
+
     for (const auto& match : kptMatches)
     {
         cv::KeyPoint* prevPt = &kptsPrev[match.queryIdx]; 
         cv::KeyPoint* currPt = &kptsCurr[match.trainIdx];
-        if (boundingBox.roi.contains(prevPt->pt) && boundingBox.roi.contains(currPt->pt))
+        if (smallerBox.contains(prevPt->pt) && smallerBox.contains(currPt->pt))
         {
             // if the matches are correct; then the points should be in similar positions in the two subsequent frames
             // hence, points from prev frame that is matched should also be inside the current bounding-box (this could itself filter some outliers)
@@ -187,7 +195,7 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
 
 // Compute time-to-collision (TTC) based on keypoint correspondences in successive images
 void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, 
-                      std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC, cv::Mat *visImg)
+                      std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC, double &meanDistChange,double &stddevDistChange,int &distRatioVecSize, cv::Mat *visImg)
 {
     // Calculate Distance change between kpts in two subsequent frames
     double minDist = 100.0; // min. required distance (to not choose points very close to each other)
@@ -214,14 +222,15 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
         }
     }
 
-    double meanDistChange = accumulate(distChangeVec.begin(), distChangeVec.end(), 0.0) / distChangeVec.size();
+    meanDistChange = accumulate(distChangeVec.begin(), distChangeVec.end(), 0.0) / distChangeVec.size();
     double variance = 0.0;
     for (double val : distChangeVec)
     {
         variance += (val - meanDistChange)*(val - meanDistChange); 
     }
     variance /= (distChangeVec.size() - 1);       // sample variance
-    double stddevDistChange = sqrt(variance);
+    stddevDistChange = sqrt(variance);
+    cout << "meanDistanceChange: " << meanDistChange << " | stddevDistChange: " << stddevDistChange << endl;
 
     vector<double> distRatioVec;
     for (int i = 0; i < distChangeVec.size(); ++i)
@@ -231,6 +240,8 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
             distRatioVec.push_back(distanceCurrVec[i] / distancePrevVec[i]);
         }
     }
+    distRatioVecSize = (int)distRatioVec.size();
+    cout << "Number of elements in distRatioVec: " << distRatioVecSize << endl;
 
     // only continue if list of distance ratios is not empty
     if (distRatioVec.size() == 0)
@@ -255,9 +266,18 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
     }
 
     double dt = 1.0 / (frameRate + 1e-8);
-    TTC = -dt / (1 - medianDistRatio);
-    cout << "Camera-TTC= " << TTC << endl;
-    return;
+    double denom = 1 - medianDistRatio;
+    if (abs(denom) < 1e-6)
+    {
+        TTC = NAN;
+        cerr << "Warning: Calculated medianDistRatio is close to 1 (i.e.: no scale change): " << medianDistRatio << endl;
+    }
+    else
+    {
+        TTC = -dt / denom;
+        cout << "Camera-TTC= " << TTC << endl;
+    }
+    
 }
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr convertToPointCloud(const std::vector<LidarPoint>& lidarPoints)

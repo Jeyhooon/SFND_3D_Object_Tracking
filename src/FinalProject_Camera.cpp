@@ -79,10 +79,10 @@ int main(int argc, const char *argv[])
 
     // Open the CSV file (to store the results)
     std::ofstream file("../Camera-TTC-data.csv");
-    file << "ImageID,detectorType,descriptorType,numMatchedKpts,cameraTTC\n";
+    file << "ImageID,detectorType,descriptorType,numMatchedKpts,meanDistChange,stddevDistChange,distRatioVecSize,cameraTTC\n";
 
     // extract 2D keypoints from current image
-    string detectorType = "HARRIS";  // SHITOMASI, HARRIS, SIFT, FAST, BRISK, ORB, AKAZE
+    string detectorType = "FAST";  // SHITOMASI, HARRIS, SIFT, FAST, BRISK, ORB, AKAZE
     vector<string> detectorList;
     if (bBenchmark)
     {
@@ -96,7 +96,7 @@ int main(int argc, const char *argv[])
     for (const string detectorType : detectorList)
     {
         /* EXTRACT KEYPOINT DESCRIPTORS */
-        string descriptorType = "SIFT"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
+        string descriptorType = "BRISK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
         vector<string> descriptorList;
         if (bBenchmark)
         {
@@ -226,7 +226,10 @@ int main(int argc, const char *argv[])
                 catch(const std::exception& e)
                 {
                     cerr << "descKeypoints: Caught OpenCV exception: " << e.what() << endl;
-                    file << int(imgIndex) << "," << detectorType << "," << descriptorType << ",-,-\n";
+                    if (dataBuffer.size() > 1)
+                    {
+                        file << int(imgIndex) << "," << detectorType << "," << descriptorType << ",-,-,-,-,-\n";
+                    }
                     continue;   // go to next image
                 }
                 
@@ -266,7 +269,7 @@ int main(int argc, const char *argv[])
                     catch(cv::Exception& e)
                     {
                         cerr << "matchDescriptors: Caught OpenCV exception: " << e.what() << endl;
-                        file << int(imgIndex) << "," << detectorType << "," << descriptorType << ",-,-\n";
+                        file << int(imgIndex) << "," << detectorType << "," << descriptorType << ",-,-,-,-,-\n";
                         continue;   // go to next image
                     }
 
@@ -281,7 +284,7 @@ int main(int argc, const char *argv[])
                     //// STUDENT ASSIGNMENT
                     //// TASK FP.1 -> match list of 3D objects (vector<BoundingBox>) between current and previous frame (implement ->matchBoundingBoxes)
                     map<int, int> bbBestMatches;        // key-value pairs (similar to dictionary in python)
-                    bVis = true;   // to visualize matched bounding-boxes (for debugging)
+                    bVis = false;   // to visualize matched bounding-boxes (for debugging)
                     matchBoundingBoxes(matches, bbBestMatches, *(dataBuffer.end()-2), *(dataBuffer.end()-1), bVis); // associate bounding boxes between current and previous frame using keypoint matches
                     bVis = false;
                     //// EOF STUDENT ASSIGNMENT
@@ -330,11 +333,13 @@ int main(int argc, const char *argv[])
                             //// TASK FP.3 -> assign enclosed keypoint matches to bounding box (implement -> clusterKptMatchesWithROI)
                             //// TASK FP.4 -> compute time-to-collision based on camera (implement -> computeTTCCamera)
                             double ttcCamera;
+                            double meanDistChange, stddevDistChange;
+                            int distRatioVecSize;
                             clusterKptMatchesWithROI(*currBB, (dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->kptMatches);                    
-                            computeTTCCamera((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, currBB->kptMatches, sensorFrameRate, ttcCamera);
+                            computeTTCCamera((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, currBB->kptMatches, sensorFrameRate, ttcCamera, meanDistChange, stddevDistChange, distRatioVecSize);
 
                             file << int(imgIndex) << "," << detectorType << "," << descriptorType << "," 
-                                    << int(currBB->kptMatches.size()) << "," << ttcCamera << "\n";
+                                    << int(currBB->kptMatches.size()) << "," << meanDistChange << "," << stddevDistChange << "," << (int)distRatioVecSize << "," << ttcCamera << "\n";
                             
                             bFoundBBwithLidarPoints = true;
                             //// EOF STUDENT ASSIGNMENT
@@ -365,7 +370,7 @@ int main(int argc, const char *argv[])
                     {
                         // means object detection couldn't find a bounding box on the preceeding vehicle in one of the frames
                         // hence, fill the file with empty results
-                        file << int(imgIndex) << "," << detectorType << "," << descriptorType << ",-,-\n";
+                        file << int(imgIndex) << "," << detectorType << "," << descriptorType << ",-,-,-,-,-\n";
                     }
 
                 }
