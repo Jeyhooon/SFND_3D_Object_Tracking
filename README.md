@@ -7,7 +7,7 @@ Welcome to the final project of the camera course. By completing all the lessons
 # Update:
 * Using PCL library to cluster Lidar points to remove outliers for more robust calculation of Lidar-based TTC (added to the dependency list below).
 * Report files are saved in Report folder and main results are saved into spreadsheet files: `Lidar-TTC-Data.ods` and `Camera-TTC-data.ods`. 
-* Script can be ran in two modes: 1. `benchmark=true;` 2. `benchmark=false;`. When it is set to `true`, the code would loop over all combinations of keypoint detector and descriptor and will save the results in `Camera-TTC-data.ods`. If it is set to `false` it will run only the current defined detector and descriptor. Data inside `Lidar-TTC-Data.ods` where inserted manually (readings from standard output from the Terminal).
+* Script can be ran in two modes: 1. `benchmark=true;` 2. `benchmark=false;`. When it is set to `true`, the code would loop over all combinations of keypoint detector and descriptor and will save the results in `Camera-TTC-data.csv`. If it is set to `false` it will run only the current defined detector and descriptor. Data inside `Lidar-TTC-Data.ods` where inserted manually (readings from standard output from the Terminal).
 
 
 In this final project, you will implement the missing parts in the schematic. To do this, you will complete four major tasks: 
