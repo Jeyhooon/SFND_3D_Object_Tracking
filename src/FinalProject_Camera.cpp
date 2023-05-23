@@ -75,13 +75,14 @@ int main(int argc, const char *argv[])
     vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
     bool bVis = false;            // visualize results
     bool bBenchmark = false;      // Benchmarking mode --> loop over kpt detectory and descriptor types
+    srand(12345);                 // use a fixed seed
 
     // Open the CSV file (to store the results)
     std::ofstream file("../Camera-TTC-data.csv");
     file << "ImageID,detectorType,descriptorType,numMatchedKpts,cameraTTC\n";
 
     // extract 2D keypoints from current image
-    string detectorType = "SHITOMASI";  // SHITOMASI, HARRIS, SIFT, FAST, BRISK, ORB, AKAZE
+    string detectorType = "HARRIS";  // SHITOMASI, HARRIS, SIFT, FAST, BRISK, ORB, AKAZE
     vector<string> detectorList;
     if (bBenchmark)
     {
@@ -95,7 +96,7 @@ int main(int argc, const char *argv[])
     for (const string detectorType : detectorList)
     {
         /* EXTRACT KEYPOINT DESCRIPTORS */
-        string descriptorType = "FREAK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
+        string descriptorType = "SIFT"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
         vector<string> descriptorList;
         if (bBenchmark)
         {
@@ -136,10 +137,11 @@ int main(int argc, const char *argv[])
                 /* DETECT & CLASSIFY OBJECTS */
 
                 float confThreshold = 0.2;
-                float nmsThreshold = 0.4;        
+                float nmsThreshold = 0.4;
+                bVis = false;        
                 detectObjects((dataBuffer.end() - 1)->cameraImg, (dataBuffer.end() - 1)->boundingBoxes, confThreshold, nmsThreshold,
                             yoloBasePath, yoloClassesFile, yoloModelConfiguration, yoloModelWeights, bVis);
-
+                bVis = false;
                 cout << "#2 : DETECT & CLASSIFY OBJECTS done" << endl;
 
 
@@ -279,7 +281,7 @@ int main(int argc, const char *argv[])
                     //// STUDENT ASSIGNMENT
                     //// TASK FP.1 -> match list of 3D objects (vector<BoundingBox>) between current and previous frame (implement ->matchBoundingBoxes)
                     map<int, int> bbBestMatches;        // key-value pairs (similar to dictionary in python)
-                    bVis = false;   // to visualize matched bounding-boxes (for debugging)
+                    bVis = true;   // to visualize matched bounding-boxes (for debugging)
                     matchBoundingBoxes(matches, bbBestMatches, *(dataBuffer.end()-2), *(dataBuffer.end()-1), bVis); // associate bounding boxes between current and previous frame using keypoint matches
                     bVis = false;
                     //// EOF STUDENT ASSIGNMENT
