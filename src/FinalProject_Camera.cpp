@@ -82,7 +82,7 @@ int main(int argc, const char *argv[])
     file << "ImageID,detectorType,descriptorType,numMatchedKpts,meanDistChange,stddevDistChange,distRatioVecSize,cameraTTC\n";
 
     // extract 2D keypoints from current image
-    string detectorType = "FAST";  // SHITOMASI, HARRIS, SIFT, FAST, BRISK, ORB, AKAZE
+    string detectorType = "HARRIS";  // SHITOMASI, HARRIS, SIFT, FAST, BRISK, ORB, AKAZE
     vector<string> detectorList;
     if (bBenchmark)
     {
@@ -96,7 +96,7 @@ int main(int argc, const char *argv[])
     for (const string detectorType : detectorList)
     {
         /* EXTRACT KEYPOINT DESCRIPTORS */
-        string descriptorType = "BRISK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
+        string descriptorType = "BRIEF"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
         vector<string> descriptorList;
         if (bBenchmark)
         {
