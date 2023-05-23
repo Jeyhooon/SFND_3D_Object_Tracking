@@ -4,6 +4,12 @@ Welcome to the final project of the camera course. By completing all the lessons
 
 <img src="images/course_code_structure.png" width="779" height="414" />
 
+# Update:
+* Using PCL library to cluster Lidar points to remove outliers for more robust calculation of Lidar-based TTC (added to the dependency list below).
+* Report files are saved in Report folder and main results are saved into spreadsheet files: `Lidar-TTC-Data.ods` and `Camera-TTC-data.ods`. 
+* Script can be ran in two modes: 1. `benchmark=true;` 2. `benchmark=false;`. When it is set to `true`, the code would loop over all combinations of keypoint detector and descriptor and will save the results in `Camera-TTC-data.ods`. If it is set to `false` it will run only the current defined detector and descriptor. Data inside `Lidar-TTC-Data.ods` where inserted manually (readings from standard output from the Terminal).
+
+
 In this final project, you will implement the missing parts in the schematic. To do this, you will complete four major tasks: 
 1. First, you will develop a way to match 3D objects over time by using keypoint correspondences. 
 2. Second, you will compute the TTC based on Lidar measurements. 
@@ -11,6 +17,8 @@ In this final project, you will implement the missing parts in the schematic. To
 4. And lastly, you will conduct various tests with the framework. Your goal is to identify the most suitable detector/descriptor combination for TTC estimation and also to search for problems that can lead to faulty measurements by the camera or Lidar sensor. In the last course of this Nanodegree, you will learn about the Kalman filter, which is a great way to combine the two independent TTC measurements into an improved version which is much more reliable than a single sensor alone can be. But before we think about such things, let us focus on your final project in the camera course. 
 
 ## Dependencies for Running Locally
+* PCL >= 1.10.0
+  * Install with apt package manager: `sudo apt install libpcl-dev`  
 * cmake >= 2.8
   * All OSes: [click here for installation instructions](https://cmake.org/install/)
 * make >= 4.1 (Linux, Mac), 3.81 (Windows)
