@@ -146,19 +146,11 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
     boundingBox.kptMatches.clear();     // was populated when matching bounding-boxes across two subsequent frames
     vector<cv::DMatch> matchesInROI;
     vector<double> distanceVec;
-
-    float shrinkFactor = 0.10;
-    cv::Rect smallerBox;
-    smallerBox.x = boundingBox.roi.x + shrinkFactor * boundingBox.roi.width / 2.0;
-    smallerBox.y = boundingBox.roi.y + shrinkFactor * boundingBox.roi.height / 2.0;
-    smallerBox.width = boundingBox.roi.width * (1 - shrinkFactor);
-    smallerBox.height = boundingBox.roi.height * (1 - shrinkFactor);
-
     for (const auto& match : kptMatches)
     {
         cv::KeyPoint* prevPt = &kptsPrev[match.queryIdx]; 
         cv::KeyPoint* currPt = &kptsCurr[match.trainIdx];
-        if (smallerBox.contains(prevPt->pt) && smallerBox.contains(currPt->pt))
+        if (boundingBox.roi.contains(prevPt->pt) && boundingBox.roi.contains(currPt->pt))
         {
             // if the matches are correct; then the points should be in similar positions in the two subsequent frames
             // hence, points from prev frame that is matched should also be inside the current bounding-box (this could itself filter some outliers)
