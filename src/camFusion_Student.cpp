@@ -3,8 +3,10 @@
 #include <iostream>
 #include <algorithm>
 #include <numeric>
+#include <opencv2/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/features2d.hpp>
 #include <pcl/point_types.h>
 #include <pcl/segmentation/extract_clusters.h>
 
@@ -347,7 +349,7 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
             minDistanceXCurr = xValues[P];
         }
     }
-    cout << "Number of Discarded-Points in the Current-Frame: " << lidarPointsCurr.size() - numPointsClusteredCurr << endl;
+    cout << "Number of Discarded-Lidar-Points in the Current-Frame: " << lidarPointsCurr.size() - numPointsClusteredCurr << endl;
     cout << "minDistanceXCurr: " << minDistanceXCurr << endl;
 
     double minDistanceXPrev = numeric_limits<double>::max();
@@ -379,7 +381,7 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
             minDistanceXPrev = xValues[P];
         }
     }
-    cout << "Number of Discarded-Points in the Previous-Frame: " << lidarPointsPrev.size() - numPointsClusteredPrev << endl;
+    cout << "Number of Discarded-Lidar-Points in the Previous-Frame: " << lidarPointsPrev.size() - numPointsClusteredPrev << endl;
     cout << "minDistanceXPrev: " << minDistanceXPrev << endl;
 
     // Computing Time-To-Collision using Constant Velocity Model (CVM) both for x (forward driving direction) 
@@ -489,16 +491,30 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
     {
         for (auto& currBox : currFrame.boundingBoxes)
         {
+            // shrink current bounding box slightly to avoid having too many outlier points around the edges
+            float shrinkFactor = 0.10;
+            cv::Rect smallerBox;
+            smallerBox.x = currBox.roi.x + shrinkFactor * currBox.roi.width / 2.0;
+            smallerBox.y = currBox.roi.y + shrinkFactor * currBox.roi.height / 2.0;
+            smallerBox.width = currBox.roi.width * (1 - shrinkFactor);
+            smallerBox.height = currBox.roi.height * (1 - shrinkFactor);
+
             // in the matchKpt, trainIdx is the index in the currFrame
-            if (currBox.roi.contains(currFrame.keypoints[matchKpt.trainIdx].pt))
+            if (smallerBox.contains(currFrame.keypoints[matchKpt.trainIdx].pt))
             {
                 currBox.kptMatches.push_back(matchKpt);
 
                 // Now, loop over the Bounding-Boxes from the prevFrame to find the match
                 for (auto& prevBox: prevFrame.boundingBoxes)
                 {
+                    cv::Rect smallerBox;
+                    smallerBox.x = prevBox.roi.x + shrinkFactor * prevBox.roi.width / 2.0;
+                    smallerBox.y = prevBox.roi.y + shrinkFactor * prevBox.roi.height / 2.0;
+                    smallerBox.width = prevBox.roi.width * (1 - shrinkFactor);
+                    smallerBox.height = prevBox.roi.height * (1 - shrinkFactor);
+
                     // in the matchKpt, queryIdx is the index in the prevFrame
-                    if (prevBox.roi.contains(prevFrame.keypoints[matchKpt.queryIdx].pt))
+                    if (smallerBox.contains(prevFrame.keypoints[matchKpt.queryIdx].pt))
                     {
                         countBoxOverlap[make_pair(prevBox.boxID, currBox.boxID)]++;
                     }
@@ -562,13 +578,53 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
             cv::rectangle(currImg, currBox, color, 2);
         }
 
-        // Concatenate images horizontally
-        cv::Mat imgConcat;
-        cv::hconcat(prevImg, currImg, imgConcat);
+        cv::Mat matchImg;
+        int visConfig = 2;  // [1: bounding boxes, 
+                            //  2: bounding-boxes + match-kpts, 
+                            //  3: bounding-boxes + all-kpts + match-lines]
+        
+        if (visConfig == 1)
+        {
+            // Concatenate images horizontally
+            cv::hconcat(prevImg, currImg, matchImg);
+        }
+        else if (visConfig == 2)
+        {
+            // extract keypoints for drawing
+            std::vector<cv::KeyPoint> prevKeypoints, currKeypoints;
+            for (auto& currBox : currFrame.boundingBoxes)
+            {
+                for (auto& match : currBox.kptMatches)
+                {
+                    prevKeypoints.push_back(prevFrame.keypoints[match.queryIdx]);
+                    currKeypoints.push_back(currFrame.keypoints[match.trainIdx]);
+                }
+            }
+            cv::drawKeypoints(prevImg, prevKeypoints, prevImg, cv::Scalar::all(-1), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+            cv::drawKeypoints(currImg, currKeypoints, currImg, cv::Scalar::all(-1), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+            
+            // Concatenate images horizontally
+            cv::hconcat(prevImg, currImg, matchImg);
+
+        }
+        else if (visConfig == 3)
+        {
+            // to plot keypoints matches as well
+            std::vector<cv::DMatch> currBBkptMatches;
+            for (auto& currBox : currFrame.boundingBoxes)
+            {
+                currBBkptMatches.insert(currBBkptMatches.end(), currBox.kptMatches.begin(), currBox.kptMatches.end());
+            }
+            cv::drawMatches(prevImg, prevFrame.keypoints,
+                            currImg, currFrame.keypoints,
+                            currBBkptMatches, matchImg,
+                            cv::Scalar::all(-1), cv::Scalar::all(-1),
+                            vector<char>(), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+        }
 
         // Display the Image
         cv::namedWindow("Matched Bounding Boxes", cv::WINDOW_NORMAL);
-        cv::imshow("Matched Bounding Boxes", imgConcat);
+        cv::imshow("Matched Bounding Boxes", matchImg);
         cv::waitKey(0); // Wait for a keystroke in the window
     }
 }
